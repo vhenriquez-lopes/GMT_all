@@ -1,0 +1,193 @@
+#!/bin/bash
+
+# Para que este archivo sea ejecutable hay que cambiar sus permisos con el siguiente comando:
+# chmod u+x ./nombre_de_este_archivo.xxxx
+
+# Definir el nombre de los archivos de entrada y salida
+output=nevadoschillan_seismic.ps                   # nombre del mapa que vas a generar
+seismic_dat=A1_locations_magnitude_gmt.dat        # archivo con los sismos a graficar
+topo=./etopo1_bedrock.grd                       # CVNCh topografia
+
+# Definir las coordenadas limites
+oeste=-71.7
+este=-71.0
+sur=-37.1
+norte=-36.5
+
+# Marco y anotaciones del marco del mapa
+# para esto se usa -B[parámetros]
+# se pueden anotar los grados, minutos, metros, etc para que aparescan, pero prefiero que se ponga a conveniencia según
+# el programa, entonces usé a quedando:
+marco='-Ba'
+
+# Proyección del Mapa
+# -Jm = mercator, seguido de un numero que es el tamaño
+proy='-Jm20'
+
+# Estilo del mapa
+# -P para estilo "retrato", si no se pone quedará el estilo "relieve"
+
+# ahora para hacer correr el primer plot, se debe usar gmt (por razones ovbias) mas
+# psbasemap, esto quiere decir que debemos definir las dimensiones, el borde y los marcos (ya lo hicimos).
+
+gmt psbasemap -R$oeste/$este/$sur/$norte $proy $marco -P > output
+# esto guardará el resultado, para mostrarlo usamos:
+#gs output (aquí poner el nombre del programa si es necesario), quitar # si se desea ver el resultado
+
+# Y TENEMOS LA BASE DEL MAPA! no habrán datos dentro, pero si condiciones de borde.
+
+# Adicionalmente podemos poner:
+# -Y para orientar verticalmente el mapa
+# -K para decirle al codigo que se van a ingresar mas cosas al mapa
+
+# ahora debemos agregar el contenido al mapa
+# use grdinfo  your_grd_file.grd
+# to find info about your grid file, such as the min and max values
+
+# You will need to make some color palettes.  These are files that tell what colors certain properties are displayed.
+# For example, your ETOPO grid has a latitude, longitude and a elevation, and you want to color code the topography
+# by elevation.  The following lines will tell you how to do that...
+
+# First, Make a color palatte
+# Typing:  makecpt
+# at the command line will give you information on pre-existing color schemes
+# This will make a color pallete of typical, pre-defined topography colors:
+
+makecpt -Crelief -T-8000/8000/500 -Z > topo.cpt
+
+#makecpt = makes GMT color palette tables
+#-C tells GMT what pre-defined color palette to use
+#-T defines the range and increment
+#-Z states that the colors will change continuously (rather than discretely)
+#topo.cpt is a new file containing your color pallete information that will be used later.
+
+
+#This next line is not necessary, but may be used to make the image appear sharper.
+#grdgradient helps to illuminate ridges in the topography from a specified angle.
+#grdgradient $topo -A135 -Ne0.8 -Gshadow.grd
+
+#grdgradient=Makes illumination shadow
+#-A is the angle from which the light is shown
+#-N normalizes the shadow according to equations stated in man grdgradient
+#-G lists the name of your output grid
+
+
+# Overlay the grid onto your map
+# Here you are adding the grid as a layer to your postscript file
+
+# This command includes a shadow grid file:
+# grdimage $topo -R -J -O -K -Ctopo.cpt -Ishadow.grd  >> $out
+
+# This command omits the shadow file:
+grdimage $topo -R -J -O -K -Ctopo.cpt   >> $out
+
+#grdimage = creates an image from a 2D netcdf grid file
+#-R = Sets the region.  Notice here I don't have to state the min and max values again.
+#-J = Sets the projection.  Again the type and size don't have to be restated.
+#-O = Overlay. The output for this line is being appended to a previous postscript code
+# i.e., you are adding another layer
+#-K = You will be appending another layer
+#-C = You will be using the color pallete topo.cpt
+
+# Now, back to the easy stuff..
+# Add coastlines
+
+pscoast -R -J -O -K -W2 -Df -Na -Ia -Lf-130.8/46/10/200+lkm >> $out
+
+#pscoast = adds coastlines
+#-W = Sets the line width and color.  Default color = black = 0 and does not have to be explicitly stated.
+#-Df = What is the resolution of the coasline dataset?  f = fine
+#-Na = Draws politcal boundaries, a = draw all the boundaries, see man pscoast for more options
+#-Ia = Draw Rivers, a = draw all rivers, see man pscoast for more options
+#-Lf = Draw a fancy map scale, f = fancy, centered on -130.8, 46 degrees. +200 = length, +lkm = kilometers
+
+
+# Add seismic locations and color code them by depth
+# Make color palette
+# Ahh, another color pallete...
+# This time, let's make it rainbow colored and call is seis.cpt
+
+makecpt -Crainbow -T0/50/10 -Z > seis.cpt
+
+# Columns 4, 3 and 5 of the data file are the longitude, latitude and depth, respectively.  This is the order
+# your data need to be in for psxy (see man file)
+
+awk '{print($4,$3,$5)}' $seis_data | psxy -R -J -O -K  -W.1 -Sc.1 -Cseis.cpt -H15 >> $out
+
+# psxy = Plot 2D lines, polygons and symbols on a map.  Fun fact -- psxyz plots in 3D.
+# -W.1 = Draws the black outline of the circles.
+# -Sc.1 = Defines the shape and size; c = circle, size = 0.1
+# -H = Header.  The first 15 lines of the file contain header information and will not be read.
+# -C = defines the color palette to be used for the depth.  We could also make all the circles one color.
+# In this case, remove the -C option and use -G instead.  -G defines the color of the circle in either white-black
+# or red/green/blue format.  Example colors:  -G0 (black); -G255 (White); -G255/0/0 (Red)
+# GMT has made this a little easier.  You could also say -Gblack or -Gred, but there are a limited amount of colors
+# you could do that with.
+
+
+# Add a scale
+psscale -D0/3.2/6/1 -B10:Depth:/:km: -Cseis.cpt -O -K >> $out
+
+# pscale = Adds a scale to go with your color palette
+# -D = set the position of the scale
+# -B = set and annotate the scale tick marks and lables.
+# -C = specify your color palette
+
+
+
+# Now, let's take a subset of seismic data and project them onto a line....
+#First, let's view the transect line
+
+#Plot transect line
+psxy center.dat -R -J -O -K -W1 -Sc.3 -G255/0/0 >> $out
+psxy center.dat -R -J -O -K -W5/255/0/0 >> $out
+
+# You should know the options by now ;-)
+
+#This ends the map making part of this exercize, now we move onto making a scatter plot from the seismic data.
+
+
+
+# PROJECT DATA
+# Here we use the GMT code project to take all the data within a certain region and project them onto a line
+
+awk '{print($4,$3,$5)}' $seis_data | project -C-124/47 -A90 -W-.2/.2 -L0/4 -H15 > projection.dat
+
+# project = projects data onto a transect
+# Note that the options are different for this command
+# -C = defines the center of your transect
+# -A = azimuth of transect (CW from N)
+# -W = Width of the transect in degrees
+# -L = length of transect in degrees
+# -H = Header declaration
+# projection.dat = new file with the original data and the projected locations
+
+
+
+
+# MAKE SCATTER PLOT
+#We want the scatter plot to be on the same page as the map, but just below it, so we need to redefine our
+#region, projection and tick marks...
+
+east=-120
+west=-124
+dmin=0
+dmax=50
+
+proj=-JX15/-5
+tick=-B1:Longitude:/10:Depth:WSen
+
+
+awk '{print($6,$3)}' projection.dat | psxy -R$west/$east/$dmin/$dmax $proj $tick -W1 -Sc.2 -G200 -O -K -Y-8 -P >> $out
+
+
+# Columns 6 and 3 are the projected longitude and the Depth, repectively
+# -Y = Shift the new plot down 8 units.  You can designate if you want to shift in centimeters (c), inches (i),
+# meters (m), or pixels (p).  Otherwise it shifts by whatever is in your gmtdefaults.
+
+# Last, but not least, image your map!
+# Common postscript viewers:  gs, gv, ggv, open, gimp
+# What, you don't like postscript files?  That's ok, uncomment this line:
+# ps2pdf $out
+
+open $out
