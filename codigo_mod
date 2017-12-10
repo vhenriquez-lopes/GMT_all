@@ -38,11 +38,11 @@ gmt psbasemap -R$oeste/$este/$sur/$norte $proy $marco -P > output
 
 # Adicionalmente podemos poner:
 # -Y para orientar verticalmente el mapa
-# -K para decirle al codigo que se van a ingresar mas cosas al mapa
+# -K para decirle al codigo que se van a ingresar mas cosas al mapa, en otras palabras, que esta es la base del mapa.
 
 # ahora debemos agregar el contenido al mapa
-# use grdinfo  your_grd_file.grd
-# to find info about your grid file, such as the min and max values
+# use gmt grdinfo  your_grd_file.grd para saber la información del mapa base a ingresar (debe ser formato .grd)
+# pagina para descargar .grd https://maps.ngdc.noaa.gov/viewers/wcs-client/
 
 # You will need to make some color palettes.  These are files that tell what colors certain properties are displayed.
 # For example, your ETOPO grid has a latitude, longitude and a elevation, and you want to color code the topography
